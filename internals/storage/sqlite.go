@@ -17,6 +17,7 @@ func InitDB() (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
 		5*time.Second,
