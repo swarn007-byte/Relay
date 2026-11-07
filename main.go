@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"encoding/json"
+    "database/sql"
+    _ "modernc.org/sqlite"
 )
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
