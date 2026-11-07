@@ -40,3 +40,44 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 
     fmt.Println("Received event:", event.Event)
 }
+import (
+    "bytes"
+    "encoding/json"
+    "net/url"
+    "strings"
+)
+
+type EventRequest struct {
+    Event     string          `json:"event"`
+    TargetURL string          `json:"target_url"`
+    Payload   json.RawMessage `json:"payload"`
+}
+
+func eventValidator(event EventRequest) bool {
+
+
+    if strings.TrimSpace(event.Event) == "" {
+        return false
+    }
+    if strings.TrimSpace(event.TargetURL) == "" {
+        return false
+    }
+
+    parsedURL, err := url.Parse(event.TargetURL)
+    if err != nil {
+        return false
+    }
+    if (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") ||
+        parsedURL.Hostname() == "" {
+        return false
+    }
+    if len(event.Payload) == 0 {
+        return false
+    }
+
+    if bytes.Equal(bytes.TrimSpace(event.Payload), []byte("null")) {
+        return false
+    }
+
+    return true
+}
