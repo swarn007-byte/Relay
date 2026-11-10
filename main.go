@@ -83,6 +83,11 @@ func main() {
 
 	log.Println("SQLite database connected successfully")
 
+	if error := storage.CreateTables(db); error != nil {
+		log.Fatal("Failed to create tables: ", error)
+	}
+	log.Println("Database tables initialized successfully")
+
 	// Initialize router
 	mux := http.NewServeMux()
 

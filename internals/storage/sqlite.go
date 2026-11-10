@@ -4,13 +4,17 @@ package storage
 // 	"database/sql"
 // 	_ "modernc.org/sqlite"
 // )
+
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+var schema string
 
 func InitDB() (*sql.DB, error) {
 	db, err := sql.Open("sqlite", "data/relay.db")
@@ -33,8 +37,15 @@ func InitDB() (*sql.DB, error) {
 
 func CreateTables(db *sql.DB) error {
 	// 1. Read schema.sql
-    // 2. Check file-reading error
-    // 3. Execute SQL
-    // 4. Check execution error
-    // 5. Return nil on success
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, schema)
+	if err != nil {
+		return err
+	}
+	return nil
 }
