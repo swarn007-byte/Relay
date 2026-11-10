@@ -30,3 +30,11 @@ func InitDB() (*sql.DB, error) {
 	}
 	return db, nil
 }
+
+func CreateTables(db *sql.DB) error {
+	// 1. Read schema.sql
+    // 2. Check file-reading error
+    // 3. Execute SQL
+    // 4. Check execution error
+    // 5. Return nil on success
+}
