@@ -14,6 +14,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+//go:embed schema.sql
 var schema string
 
 func InitDB() (*sql.DB, error) {

@@ -10,6 +10,6 @@ create table if not exists delivery_jobs(
  event_id text not null references events(id),
  status text not null,
  target_url text not null,
- attempts integer not null default 0
+ attempts integer not null default 0,
  next_attempt_at text
 );
