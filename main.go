@@ -108,7 +108,10 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", healthHandler)
-	mux.HandleFunc("POST /events", eventHandler)
+	// mux.HandleFunc("POST /events", eventHandler)
+	mux.HandleFunc("POST /events", func(w http.ResponseWriter, r *http.Request) {
+		eventHandler(w, r, db)
+	}) //w aur r automatically go's HTTP server hamare registered handler ko provide karta hai, but we have to pass db explicitly that's why we used closure here.
 
 	// Start server
 	log.Println("Relay server running on port 8080")
