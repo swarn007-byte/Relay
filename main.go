@@ -114,9 +114,9 @@ func main() {
 	}) //w aur r automatically go's HTTP server hamare registered handler ko provide karta hai, but we have to pass db explicitly that's why we used closure here.
 
 	// Start server
-	log.Println("Relay server running on port 8080")
+	log.Println("Relay server running on port 8081")
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	if err := http.ListenAndServe(":8081", mux); err != nil {
 		log.Fatal(err)
 	}
 }

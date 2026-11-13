@@ -7,10 +7,10 @@ import (
 )
 
 type DeliveryJob struct {
-	eventsID   string
-	deliveryID string
-	attempts   int
-	targetUrl  string
+	EventID    string
+	DeliveryID string
+	Attempts   int
+	TargetURL  string
 }
 
 //cuz jb db se row fetch kroge so go need smthing to store those
@@ -44,10 +44,10 @@ func FetchPendingJobs(
 		var job DeliveryJob
 
 		err := rows.Scan(
-			&job.deliveryID,
-			&job.eventsID,
-			&job.targetUrl,
-			&job.attempts,
+			&job.DeliveryID,
+			&job.EventID,
+			&job.TargetURL,
+			&job.Attempts,
 		)
 		if err != nil {
 			return nil, err
@@ -61,4 +61,36 @@ func FetchPendingJobs(
 	}
 
 	return jobs, nil
+}
+func ClaimJob(
+	ctx context.Context,
+	db *sql.DB,
+	deliveryID string,
+
+) (bool, error) {
+
+	result, err := db.ExecContext(
+		ctx,
+		`update delivery_jobs
+		  set status = 'processing'
+				where delivery_id=? and status = "pending" and next_attempt_at <=?`,
+		deliveryID,
+		time.Now().UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return false, err
+	}
+
+	// `update delivery_jobs
+	//   set status = 'processing'
+	// 		where delivery_id=?,and status = pending,and next_attempt <=?`,
+	// 		deliveryID,
+	// 		time.Now().UTC().Format(time.RFC3339Nano),
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return affected == 1, nil
 }
