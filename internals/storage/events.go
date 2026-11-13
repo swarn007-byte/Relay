@@ -46,7 +46,7 @@ func SaveEvent(
 	// insert into events(id,event_type,payload,created_at)
 	// values(eventID,eventType,payload,time.Now())
 
-	delivery_ID := uuid.NewString()
+	deliveryID := uuid.NewString()
 
 	//insert into delivery job table
 	_, err = tx.ExecContext(
@@ -54,7 +54,7 @@ func SaveEvent(
 		`insert into delivery_jobs
 			(delivery_id, event_id, status, target_url, attempts, next_attempt_at)
 			values (?, ?, ?, ?, ?, ?)`,
-		delivery_ID,
+		deliveryID,
 		eventID,
 		"pending",
 		targetURL,

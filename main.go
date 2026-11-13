@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/swarn007-byte/Relay/internals/storage"
 )
@@ -52,8 +55,7 @@ func eventValidator(event EventRequest) bool {
 
 	return true
 }
-
-func eventHandler(w http.ResponseWriter, r *http.Request) {
+func eventHandler(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	var event EventRequest
 
 	err := json.NewDecoder(r.Body).Decode(&event)
@@ -67,10 +69,24 @@ func eventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("Received event:", event.Event)
+	eventID := uuid.NewString()
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Event received successfully")
+	err = storage.SaveEvent(
+		r.Context(),
+		db,
+		eventID,
+		event.Event,
+		event.TargetURL,
+		event.Payload,
+	)
+	if err != nil {
+		log.Println("Failed to save event:", err)
+		http.Error(w, "Failed to save event", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintln(w, "Event accepted:", eventID)
 }
 
 func main() {
