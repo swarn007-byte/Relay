@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,9 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/swarn007-byte/Relay/internals/internals/worker"
 	"github.com/swarn007-byte/Relay/internals/storage"
 )
 
@@ -103,6 +106,26 @@ func main() {
 		log.Fatal("Failed to create tables: ", error)
 	}
 	log.Println("Database tables initialized successfully")
+
+	jobs := make(chan storage.DeliveryJob, 10)
+
+	wg := worker.StartPool(jobs, 3)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	if err := worker.ScheduleJobs(ctx, db, jobs, 10); err != nil {
+		log.Println("Scheduling error:", err)
+	}
+
+	close(jobs)
+
+	wg.Wait()
+
+	log.Println("Worker pool test completed")
 
 	// Initialize router
 	mux := http.NewServeMux()
