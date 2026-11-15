@@ -7,10 +7,11 @@ import (
 )
 
 type DeliveryJob struct {
-	EventID    string
 	DeliveryID string
-	Attempts   int
+	EventID    string
 	TargetURL  string
+	Attempts   int
+	Payload    string
 }
 
 //cuz jb db se row fetch kroge so go need smthing to store those
@@ -24,15 +25,16 @@ func FetchPendingJobs(
 
 	rows, err := db.QueryContext(
 		ctx,
-		`select delivery_id,event_id,target_url,attempts
-       from delivery_jobs
-       WHERE status = 'pending'
-                  AND next_attempt_at <= ?
-                ORDER BY next_attempt_at ASC
-                LIMIT ?
-
-     `,
-		now, limit,
+		`SELECT d.delivery_id, d.event_id,
+            d.target_url, d.attempts, e.payload
+     FROM delivery_jobs d
+     JOIN events e ON d.event_id = e.id
+     WHERE d.status = 'pending'
+       AND d.next_attempt_at <= ?
+     ORDER BY d.next_attempt_at ASC
+     LIMIT ?`,
+		now,
+		limit,
 	)
 	if err != nil {
 		return nil, err
@@ -48,6 +50,7 @@ func FetchPendingJobs(
 			&job.EventID,
 			&job.TargetURL,
 			&job.Attempts,
+			&job.Payload,
 		)
 		if err != nil {
 			return nil, err
@@ -76,7 +79,7 @@ func ClaimJob(
 				where delivery_id=? and status = "pending" and next_attempt_at <=?`,
 		deliveryID,
 		time.Now().UTC().Format(time.RFC3339Nano),
-	) 
+	)
 	if err != nil {
 		return false, err
 	}
