@@ -76,7 +76,7 @@ func ClaimJob(
 				where delivery_id=? and status = "pending" and next_attempt_at <=?`,
 		deliveryID,
 		time.Now().UTC().Format(time.RFC3339Nano),
-	)
+	) 
 	if err != nil {
 		return false, err
 	}
