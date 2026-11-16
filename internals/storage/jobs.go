@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -96,4 +97,39 @@ func ClaimJob(
 	}
 
 	return affected == 1, nil
+}
+func MarkDelivered(
+	ctx context.Context,
+	db *sql.DB,
+	deliveryID string,
+) error {
+
+	result, err := db.ExecContext(
+		ctx,
+		`UPDATE delivery_jobs
+         SET status = 'delivered',
+             attempts = attempts + 1,
+             next_attempt_at = NULL
+         WHERE delivery_id = ?
+           AND status = 'processing'`,
+		deliveryID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected != 1 {
+		return fmt.Errorf(
+			"delivery job %s not in processing state",
+			deliveryID,
+		)
+	}
+
+	return nil
 }
