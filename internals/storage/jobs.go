@@ -133,3 +133,41 @@ func MarkDelivered(
 
 	return nil
 }
+
+func ScheduleRetry(
+	ctx context.Context,
+	db *sql.DB,
+	deliveryID string,
+	nextAttemptAt time.Time,
+) error {
+
+	result, err := db.ExecContext(
+		ctx,
+		`UPDATE delivery_jobs
+         SET status = 'pending',
+             attempts = attempts + 1,
+             next_attempt_at = ?
+         WHERE delivery_id = ?
+           AND status = 'processing'`,
+		nextAttemptAt.UTC().Format(time.RFC3339Nano),
+		deliveryID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected != 1 {
+		return fmt.Errorf(
+			"cannot retry delivery job %s: not processing",
+			deliveryID,
+		)
+	}
+
+	return nil
+}
