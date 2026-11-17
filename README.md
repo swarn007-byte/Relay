@@ -1,3 +1,5 @@
+> **SaaS dashboard:** The default workflow now serves an account-based dashboard at `/app`. See [SAAS.md](SAAS.md) for setup, project API keys, tenant isolation, and hosting. The single-owner API examples below require `RELAY_LEGACY_MODE=true`; they are not the public SaaS API.
+
 # Relay
 
 Relay is a self-hosted webhook delivery service written in Go.

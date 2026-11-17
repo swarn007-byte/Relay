@@ -18,13 +18,14 @@ var (
 )
 
 type DeliveryJob struct {
-	DeliveryID string
-	EventID    string
-	EventType  string
-	TargetURL  string
-	Payload    string
-	Attempts   int
-	LeaseToken string
+	SigningSecret string
+	DeliveryID    string
+	EventID       string
+	EventType     string
+	TargetURL     string
+	Payload       string
+	Attempts      int
+	LeaseToken    string
 }
 
 type AttemptOutcome struct {
@@ -70,7 +71,7 @@ func FetchDueJobs(ctx context.Context, db *sql.DB, limit int) ([]DeliveryJob, er
 	rows, err := db.QueryContext(
 		ctx,
 		`select d.delivery_id, d.event_id, e.event_type,
-		        d.target_url, d.attempts, e.payload
+		        d.target_url, d.attempts, e.payload, coalesce((select signing_secret from event_scopes where event_id=e.id), '')
 		 from delivery_jobs d
 		 join events e on d.event_id = e.id
 		 where d.status = 'pending'
@@ -96,6 +97,7 @@ func FetchDueJobs(ctx context.Context, db *sql.DB, limit int) ([]DeliveryJob, er
 			&job.TargetURL,
 			&job.Attempts,
 			&job.Payload,
+			&job.SigningSecret,
 		); err != nil {
 			return nil, err
 		}

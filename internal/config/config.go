@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	SaaS                     bool
 	Port                     string
 	DBPath                   string
 	WorkerCount              int
@@ -29,6 +30,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
+		SaaS:                     os.Getenv("RELAY_LEGACY_MODE") != "true",
 		Port:                     env("RELAY_PORT", "8081"),
 		DBPath:                   env("RELAY_DB_PATH", "data/relay.db"),
 		WebhookSecret:            []byte(os.Getenv("RELAY_WEBHOOK_SECRET")),

@@ -37,3 +37,13 @@ create table if not exists delivery_attempts(
 );
 
 create index if not exists idx_delivery_attempts_delivery on delivery_attempts(delivery_id, attempt_number);
+
+create table if not exists accounts(id text primary key, email text not null unique, password_hash text not null, salt text not null, created_at integer not null);
+create table if not exists sessions(token_hash text primary key, account_id text not null references accounts(id), expires_at integer not null);
+create table if not exists projects(id text primary key, account_id text not null references accounts(id), name text not null, created_at integer not null);
+create table if not exists endpoints(id text primary key, project_id text not null references projects(id), name text not null, url text not null, signing_secret text not null, enabled integer not null default 1, created_at integer not null);
+create table if not exists api_keys(id text primary key, project_id text not null references projects(id), name text not null, token_hash text not null unique, prefix text not null, revoked integer not null default 0, created_at integer not null);
+create table if not exists event_scopes(event_id text primary key references events(id), project_id text not null references projects(id), endpoint_id text not null references endpoints(id), signing_secret text not null);
+create index if not exists idx_scopes_project on event_scopes(project_id);
+create table if not exists usage_months(project_id text not null references projects(id), month text not null, events integer not null default 0, primary key(project_id,month));
+create table if not exists auth_limits(bucket text primary key, attempts integer not null, expires_at integer not null);

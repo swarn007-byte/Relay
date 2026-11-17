@@ -50,15 +50,28 @@ func New(cfg *config.Config, db *sql.DB, guard *security.Guard) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("POST /events", s.handleCreateEvent)
-	mux.Handle("GET /deliveries", s.requireAdmin(http.HandlerFunc(s.handleListDeliveries)))
-	mux.Handle("GET /deliveries/{id}", s.requireAdmin(http.HandlerFunc(s.handleGetDelivery)))
-	mux.Handle("GET /deliveries/{id}/attempts", s.requireAdmin(http.HandlerFunc(s.handleGetAttempts)))
-	mux.Handle("POST /deliveries/{id}/replay", s.requireAdmin(http.HandlerFunc(s.handleReplay)))
+	if s.cfg.SaaS {
+		s.saasRoutes(mux)
+	} else {
+		mux.HandleFunc("POST /events", s.handleCreateEvent)
+		mux.Handle("GET /deliveries", s.requireAdmin(http.HandlerFunc(s.handleListDeliveries)))
+		mux.Handle("GET /deliveries/{id}", s.requireAdmin(http.HandlerFunc(s.handleGetDelivery)))
+		mux.Handle("GET /deliveries/{id}/attempts", s.requireAdmin(http.HandlerFunc(s.handleGetAttempts)))
+		mux.Handle("POST /deliveries/{id}/replay", s.requireAdmin(http.HandlerFunc(s.handleReplay)))
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "no such endpoint")
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

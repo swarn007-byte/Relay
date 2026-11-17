@@ -63,7 +63,11 @@ func (c *Client) Deliver(ctx context.Context, job storage.DeliveryJob) AttemptRe
 	started := c.now()
 	res := AttemptResult{StartedAt: started}
 
-	if len(c.secret) == 0 {
+	secret := c.secret
+	if job.SigningSecret != "" {
+		secret = []byte(job.SigningSecret)
+	}
+	if len(secret) == 0 {
 		res.FinishedAt = c.now()
 		res.Error = "webhook signing secret is not configured"
 		return res
@@ -92,7 +96,7 @@ func (c *Client) Deliver(ctx context.Context, job storage.DeliveryJob) AttemptRe
 	req.Header.Set(DeliveryIDHeader, job.DeliveryID)
 	req.Header.Set(EventTypeHeader, job.EventType)
 	req.Header.Set(TimestampHeader, strconv.FormatInt(timestamp.Unix(), 10))
-	req.Header.Set(SignatureHeader, SignaturePrefix+SignPayload(body, c.secret, timestamp))
+	req.Header.Set(SignatureHeader, SignaturePrefix+SignPayload(body, secret, timestamp))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
