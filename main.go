@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -108,8 +109,13 @@ func main() {
 	log.Println("Database tables initialized successfully")
 
 	jobs := make(chan storage.DeliveryJob, 10)
+	secret := []byte(os.Getenv("RELAY_WEBHOOK_SECRET"))
 
-	wg := worker.StartPool(jobs, 3)
+	if len(secret) < 32 {
+		log.Fatal("RELAY_WEBHOOK_SECRET must contain at least 32 bytes")
+	}
+
+	wg := worker.StartPool(ctx, db, jobs, 3, secret)
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
