@@ -31,7 +31,7 @@ func run() error {
 		return fmt.Errorf("configuration: %w", err)
 	}
 
-	db, err := storage.Open(cfg.DBPath)
+	db, err := storage.OpenConfigured(cfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}

@@ -84,7 +84,7 @@ func (s *Server) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	}
 	return true
 }
-func safeWrite(w http.ResponseWriter, r *http.Request) bool {
+func (s *Server) safeWrite(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method == "GET" {
 		return true
 	}
@@ -94,7 +94,16 @@ func safeWrite(w http.ResponseWriter, r *http.Request) bool {
 	}
 	if origin := r.Header.Get("Origin"); origin != "" {
 		u, e := url.Parse(origin)
-		if e != nil || u.Host != r.Host {
+		expected := r.Host
+		if s.cfg.PublicURL != "" {
+			public, _ := url.Parse(s.cfg.PublicURL)
+			expected = public.Host
+			if e == nil && u.Scheme != public.Scheme {
+				writeError(w, 403, "origin rejected")
+				return false
+			}
+		}
+		if e != nil || u.Host != expected {
 			writeError(w, 403, "origin rejected")
 			return false
 		}
@@ -111,7 +120,7 @@ func (s *Server) account(r *http.Request) (string, error) {
 	return id, e
 }
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if !safeWrite(w, r) {
+	if !s.safeWrite(w, r) {
 		return "", false
 	}
 	id, e := s.account(r)
@@ -123,7 +132,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) (string, bool
 	return id, true
 }
 func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) {
-	if !safeWrite(w, r) {
+	if !s.safeWrite(w, r) {
 		return
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
@@ -180,12 +189,12 @@ func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "session creation failed")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "relay_session", Value: raw, Path: "/", HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteStrictMode, MaxAge: 604800})
+	http.SetCookie(w, &http.Cookie{Name: "relay_session", Value: raw, Path: "/", HttpOnly: true, Secure: strings.HasPrefix(s.cfg.PublicURL, "https://") || r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", SameSite: http.SameSiteStrictMode, MaxAge: 604800})
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, map[string]string{"email": req.Email})
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if !safeWrite(w, r) {
+	if !s.safeWrite(w, r) {
 		return
 	}
 	if c, e := r.Cookie("relay_session"); e == nil {

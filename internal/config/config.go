@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 type Config struct {
 	SaaS                     bool
+	PublicURL                string
 	Port                     string
 	DBPath                   string
 	WorkerCount              int
@@ -30,6 +32,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
+		PublicURL:                strings.TrimRight(os.Getenv("RELAY_PUBLIC_URL"), "/"),
 		SaaS:                     os.Getenv("RELAY_LEGACY_MODE") != "true",
 		Port:                     env("RELAY_PORT", "8081"),
 		DBPath:                   env("RELAY_DB_PATH", "data/relay.db"),
@@ -85,6 +88,13 @@ func Load() (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.PublicURL != "" {
+		u, err := url.Parse(c.PublicURL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("RELAY_PUBLIC_URL must be an HTTP(S) origin without a path, query, or credentials")
+		}
+	}
+
 	port, err := strconv.Atoi(c.Port)
 	if err != nil || port < 1 || port > 65535 {
 		return fmt.Errorf("RELAY_PORT must be a valid port number, got %q", c.Port)

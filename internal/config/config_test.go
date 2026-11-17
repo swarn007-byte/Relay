@@ -12,6 +12,8 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	keys := []string{
 		"RELAY_PORT",
+		"RELAY_PUBLIC_URL",
+		"RELAY_LEGACY_MODE",
 		"RELAY_DB_PATH",
 		"RELAY_WORKER_COUNT",
 		"RELAY_SCHEDULER_INTERVAL",
@@ -136,5 +138,26 @@ func TestLoadCustomValues(t *testing.T) {
 	}
 	if cfg.AdminToken != "admin-token-123456" {
 		t.Fatal("admin token not applied")
+	}
+}
+
+func TestPublicURLValidation(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		valid bool
+	}{
+		{"https://relay.example.com", true}, {"https://relay.example.com/", true},
+		{"https://relay.example.com/app", false}, {"https://user:password@relay.example.com", false},
+		{"javascript:alert(1)", false}, {"https://relay.example.com?test=1", false},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			clearEnv(t)
+			t.Setenv("RELAY_WEBHOOK_SECRET", testSecretEnv)
+			t.Setenv("RELAY_PUBLIC_URL", tc.value)
+			_, err := Load()
+			if (err == nil) != tc.valid {
+				t.Fatalf("URL validity got err=%v expected valid=%v", err, tc.valid)
+			}
+		})
 	}
 }

@@ -38,9 +38,9 @@ Startup creates additive account/project/key/scope/usage tables without changing
 
 ## Hosting
 
-Run the Go process on a VM or a container host with a durable writable volume at `/data`, for example using the included Dockerfile. Run one instance against the SQLite database. Put HTTPS in front of it; forward `X-Forwarded-Proto: https` from your trusted TLS proxy and prevent direct public access to its internal port. Route both the dashboard and API to the same origin. The application does not enable cross-origin browser access.
+Run the Go process on a container host. For the free demo, configure a free Turso database using `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; no local disk is needed. For self-hosted SQLite, use a durable writable volume at `/data`, for example using the included Dockerfile. Run one instance against the SQLite database. Put HTTPS in front of it; forward `X-Forwarded-Proto: https` from your trusted TLS proxy and prevent direct public access to its internal port. Route both the dashboard and API to the same origin. The application does not enable cross-origin browser access.
 
-Set `RELAY_WEBHOOK_SECRET` in the host's secret settings, mount a durable volume, and set `RELAY_DB_PATH=/data/relay.db`. The container runs as non-root (UID 65532); provision the volume with appropriate ownership. Validate `/health` returns `{"status":"ok"}`, then run the signup-to-delivery flow. Back up the SQLite database and protect it: it contains payloads and signing secrets. Vercel's static hosting alone cannot run this background worker or retain SQLite storage.
+Set `RELAY_WEBHOOK_SECRET` in the host's secret settings. For local SQLite hosting, mount a durable volume and set `RELAY_DB_PATH=/data/relay.db`. The container runs as non-root (UID 65532); provision the volume with appropriate ownership. Validate `/health` returns `{"status":"ok"}`, then run the signup-to-delivery flow. Back up the SQLite database and protect it: it contains payloads and signing secrets. Vercel's static hosting alone cannot run this background worker or retain SQLite storage.
 
 ## Current scope
 
@@ -55,3 +55,38 @@ go build ./...
 ```
 
 The SaaS integration test exercises two accounts, tenant isolation, CSRF rejection, key authentication/revocation, endpoint disabling, limits, endpoint-specific HMAC verification through real worker dispatch, attempt persistence, replay constraints, logout, and subsequent login. Existing legacy tests continue to run in legacy mode.
+
+## Free demo deployment: Render + Turso + Vercel
+
+`render.yaml` uses Render's **free** web service with a remote Turso database. It does not request a paid service or disk. Free-tier availability and limits remain controlled by each provider. Render may sleep when idle, so dispatch and retry scheduling pause until the service wakes. This is suitable for a demo, not an always-on delivery promise.
+
+1. Create a free Turso database. Keep its database URL and token in provider secret settings; never commit or paste the token into chat.
+2. Deploy this repository using Render's Blueprint workflow. The blueprint asks for `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; enter them securely in Render. Database startup fails if configuration is incomplete, so it cannot silently lose data in an ephemeral file.
+3. The blueprint generates the legacy worker secret and sets the canonical browser origin to the existing Vercel production URL. Copy the new Render service's public URL (not a credential).
+4. Connect the existing Vercel deployment using the command below. It checks backend health/dashboard before publishing a proxy deployment. It requires an authenticated Vercel CLI and the project link in `website/.vercel/project.json`. All pages and APIs then share the public browser origin.
+5. Test signup, project and endpoint creation, and a real delivery on the public URL before calling the deployment complete.
+
+```sh
+# RELAY_VERCEL_CONFIG_DIR is optional; use it if CLI credentials are in a custom directory.
+node scripts/connect-vercel.mjs https://YOUR-SERVICE.onrender.com
+```
+
+`RELAY_PUBLIC_URL` lets the application validate browser requests forwarded by Vercel to a different backend hostname and forces Secure session cookies for HTTPS origins. Set it to your canonical website origin, never an untrusted origin. Opening a second hostname to perform login is intentionally rejected when a different canonical origin is configured.
+
+The remote connector uses TLS and keeps authentication out of database URLs and connection-error messages. Local self-hosted SQLite remains available if neither Turso setting is supplied. Existing local records are not automatically uploaded into a new remote database.
+
+### Remote database integration test
+
+The SaaS end-to-end test can also run against a disposable libSQL server. Use a fresh test container/database for each run; do not point this command at a production database. The test trusts its own local TLS certificate without disabling verification and checks the same account isolation, signed delivery, quota, and replay behavior as the local SQLite test.
+
+```sh
+docker run --rm -d --name relay-libsql-test -p 127.0.0.1:8095:8080 ghcr.io/tursodatabase/libsql-server:latest
+RELAY_TEST_LIBSQL_HTTP_URL=http://127.0.0.1:8095 go test ./internal/api -run TestSaaSTenantFlow -count=1
+docker stop relay-libsql-test
+```
+
+When building inside a managed environment that uses a custom HTTPS certificate authority, supply its trusted public CA bundle as a BuildKit secret; TLS and Go module checksum verification remain enabled. The certificate bundle is available only during dependency installation and is not copied into the deployed image.
+
+```sh
+docker build --secret id=ca_bundle,src=/etc/ssl/certs/ca-certificates.crt -t relay .
+```

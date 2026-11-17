@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: relay
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    numInstances: 1
+    envVars:
+      - key: RELAY_PORT
+        value: "8081"
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: RELAY_WEBHOOK_SECRET
+        generateValue: true
+      - key: RELAY_LEGACY_MODE
+        value: "false"
+      - key: RELAY_ALLOW_PRIVATE_DESTINATIONS
+        value: "false"
+      - key: RELAY_PUBLIC_URL
+        value: https://relay-dun-ten-19.vercel.app

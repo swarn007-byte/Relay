@@ -1,7 +1,9 @@
 FROM golang:1.26.4-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download && go mod verify
+RUN --mount=type=secret,id=ca_bundle \
+    if [ -f /run/secrets/ca_bundle ]; then export SSL_CERT_FILE=/run/secrets/ca_bundle; fi; \
+    go mod download && go mod verify
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /relay .
 

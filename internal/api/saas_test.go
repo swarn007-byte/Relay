@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -21,6 +24,22 @@ import (
 
 func TestSaaSTenantFlow(t *testing.T) {
 	db, e := storage.Open(filepath.Join(t.TempDir(), "saas.db"))
+	if upstream := os.Getenv("RELAY_TEST_LIBSQL_HTTP_URL"); upstream != "" {
+		if e != nil {
+			t.Fatal(e)
+		}
+		db.Close()
+		target, err := url.Parse(upstream)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proxy := httptest.NewTLSServer(httputil.NewSingleHostReverseProxy(target))
+		defer proxy.Close()
+		previous := http.DefaultClient
+		http.DefaultClient = proxy.Client()
+		defer func() { http.DefaultClient = previous }()
+		db, e = storage.OpenRemote(proxy.URL, "local-integration-test")
+	}
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -180,4 +199,24 @@ func TestSaaSTenantFlow(t *testing.T) {
 	request(alice, "GET", "/api/me", "", "", 401)
 	request(alice, "POST", "/api/auth/login", `{"email":"user0@example.com","password":"long-secure-test-password"}`, "", 200)
 	request(alice, "GET", base+"/keys", "", "", 200)
+}
+
+func TestProxyOriginProtection(t *testing.T) {
+	s := &Server{cfg: &config.Config{PublicURL: "https://relay.example.com"}}
+	for _, tc := range []struct {
+		origin string
+		want   bool
+	}{
+		{"https://relay.example.com", true},
+		{"https://attacker.example", false},
+		{"http://relay.example.com", false},
+		{"https://backend.onrender.com", false},
+	} {
+		r := httptest.NewRequest("POST", "https://backend.onrender.com/api/projects", strings.NewReader(`{}`))
+		r.Header.Set("Origin", tc.origin)
+		r.Header.Set("X-Relay-CSRF", "1")
+		if got := s.safeWrite(httptest.NewRecorder(), r); got != tc.want {
+			t.Errorf("origin %q got %v want %v", tc.origin, got, tc.want)
+		}
+	}
 }
