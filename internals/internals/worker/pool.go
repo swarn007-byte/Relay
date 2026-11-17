@@ -43,7 +43,7 @@ func StartPool(
 					return
 				}
 
-				err := DeliverWebhook(ctx, job)
+				err := DeliverWebhook(ctx, job,secret)
 
 				dbCtx, cancel := context.WithTimeout(
 					context.Background(),
