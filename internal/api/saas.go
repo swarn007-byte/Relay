@@ -19,7 +19,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/swarn007-byte/Relay/internal/storage"
-	"github.com/swarn007-byte/Relay/website"
 )
 
 const monthlyLimit = 10000
@@ -54,12 +53,6 @@ func (s *Server) saasRoutes(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("POST /api/v1/events", s.ingest)
 	mux.HandleFunc("POST /events", s.ingest)
-	assets := http.FileServer(http.FS(website.Files))
-	mux.Handle("GET /app", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { r.URL.Path = "/app.html"; assets.ServeHTTP(w, r) }))
-	for _, path := range []string{"/index.html", "/style.css", "/app.css", "/app.js"} {
-		mux.Handle("GET "+path, assets)
-	}
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { assets.ServeHTTP(w, r) })
 }
 func (s *Server) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	limit := s.cfg.MaxBodyBytes

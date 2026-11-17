@@ -19,5 +19,3 @@ services:
         value: "false"
       - key: RELAY_ALLOW_PRIVATE_DESTINATIONS
         value: "false"
-      - key: RELAY_PUBLIC_URL
-        value: https://relay-dun-ten-19.vercel.app

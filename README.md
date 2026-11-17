@@ -1,4 +1,4 @@
-> **SaaS dashboard:** The default workflow now serves an account-based dashboard at `/app`. See [SAAS.md](SAAS.md) for setup, project API keys, tenant isolation, and hosting. The single-owner API examples below require `RELAY_LEGACY_MODE=true`; they are not the public SaaS API.
+> **API service:** The website and dashboard have been removed. See [SAAS.md](SAAS.md) for the account/project API. The single-owner API examples below require `RELAY_LEGACY_MODE=true`.
 
 # Relay
 

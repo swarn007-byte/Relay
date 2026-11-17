@@ -54,14 +54,14 @@ func TestSaaSTenantFlow(t *testing.T) {
 	guard := security.NewGuard(true, nil)
 	srv := httptest.NewServer(New(&config.Config{SaaS: true, MaxBodyBytes: 1 << 20}, db, guard).Handler())
 	defer srv.Close()
-	for _, path := range []string{"/", "/app", "/app.js", "/app.css"} {
+	for _, path := range []string{"/", "/app", "/app.js", "/app.css", "/index.html", "/style.css"} {
 		res, err := http.Get(srv.URL + path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		res.Body.Close()
-		if res.StatusCode != 200 {
-			t.Fatalf("asset %s: %d", path, res.StatusCode)
+		if res.StatusCode != http.StatusNotFound {
+			t.Fatalf("removed website route %s: got %d, want 404", path, res.StatusCode)
 		}
 	}
 	newClient := func() *http.Client { jar, _ := cookiejar.New(nil); return &http.Client{Jar: jar} }
