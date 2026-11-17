@@ -6,61 +6,92 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/swarn007-byte/Relay/internal/storage"
 )
 
-func ScheduleJobs(
+type SchedulerOptions struct {
+	Interval  time.Duration
+	BatchSize int
+	LeaseTTL  time.Duration
+	Now       func() time.Time
+}
+
+func RunScheduler(
 	ctx context.Context,
 	db *sql.DB,
 	jobs chan<- storage.DeliveryJob,
-	limit int,
+	opts SchedulerOptions,
+) {
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
 
+	recoverLeases(ctx, db)
+
+	ticker := time.NewTicker(opts.Interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			recoverLeases(ctx, db)
+			if err := dispatchDueJobs(ctx, db, jobs, opts); err != nil && ctx.Err() == nil {
+				log.Println("Scheduler error:", err)
+			}
+		case <-ctx.Done():
+			log.Println("Scheduler stopped")
+			return
+		}
+	}
+}
+
+func recoverLeases(ctx context.Context, db *sql.DB) {
+	recovered, err := storage.RecoverExpiredLeases(ctx, db)
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Println("Lease recovery error:", err)
+		}
+		return
+	}
+	if recovered > 0 {
+		log.Printf("Recovered %d abandoned delivery job(s)", recovered)
+	}
+}
+
+func dispatchDueJobs(
+	ctx context.Context,
+	db *sql.DB,
+	jobs chan<- storage.DeliveryJob,
+	opts SchedulerOptions,
 ) error {
-	pendingJobs, err := storage.FetchPendingJobs(ctx, db, limit)
+	pending, err := storage.FetchDueJobs(ctx, db, opts.BatchSize)
 	if err != nil {
 		return err
 	}
-	for _, job := range pendingJobs {
-		claimed, err := storage.ClaimJob(ctx, db, job.DeliveryID)
+
+	for _, job := range pending {
+		leaseToken := uuid.NewString()
+		claimed, err := storage.ClaimJob(ctx, db, job.DeliveryID, leaseToken, opts.LeaseTTL)
 		if err != nil {
 			return err
 		}
 		if !claimed {
 			continue
 		}
+		job.LeaseToken = leaseToken
+
 		select {
 		case jobs <- job:
 			log.Println("Scheduled job:", job.DeliveryID)
-
 		case <-ctx.Done():
+			releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := storage.ReleaseJob(releaseCtx, db, job); err != nil {
+				log.Println("Could not release claimed job:", err)
+			}
+			cancel()
 			return ctx.Err()
 		}
 	}
 	return nil
-}
-
-func RunSchedular(
-	ctx context.Context,
-	db *sql.DB,
-	jobs chan<- storage.DeliveryJob,
-) {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			err := ScheduleJobs(ctx, db, jobs, 10)
-			if err != nil && ctx.Err() == nil {
-				log.Println("Scheduler error:", err)
-			}
-
-		case <-ctx.Done():
-			log.Println("Scheduler stopped")
-			return
-		}
-	}
-	//hum time.sleep bhi use kr skte the but after cancellation
-	// it does not receive interrupt it wait for leftover time for new
-	// cycle.
 }
