@@ -22,7 +22,6 @@ type Config struct {
 	AdminToken               string
 	AllowPrivateDestinations bool
 	AllowedPorts             []int
-	ReplayWindow             time.Duration
 	ShutdownTimeout          time.Duration
 	MaxBodyBytes             int64
 	BatchSize                int
@@ -61,9 +60,6 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.LeaseTTL, err = envDuration("RELAY_LEASE_TTL", time.Minute); err != nil {
-		return Config{}, err
-	}
-	if cfg.ReplayWindow, err = envDuration("RELAY_REPLAY_WINDOW", 5*time.Minute); err != nil {
 		return Config{}, err
 	}
 	if cfg.ShutdownTimeout, err = envDuration("RELAY_SHUTDOWN_TIMEOUT", 15*time.Second); err != nil {
@@ -117,9 +113,6 @@ func (c Config) Validate() error {
 	}
 	if c.LeaseTTL <= c.HTTPTimeout {
 		return fmt.Errorf("RELAY_LEASE_TTL must be greater than RELAY_HTTP_TIMEOUT")
-	}
-	if c.ReplayWindow < time.Second {
-		return fmt.Errorf("RELAY_REPLAY_WINDOW must be at least 1s")
 	}
 	if c.ShutdownTimeout < time.Second {
 		return fmt.Errorf("RELAY_SHUTDOWN_TIMEOUT must be at least 1s")

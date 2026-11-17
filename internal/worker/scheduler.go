@@ -14,7 +14,6 @@ type SchedulerOptions struct {
 	Interval  time.Duration
 	BatchSize int
 	LeaseTTL  time.Duration
-	Now       func() time.Time
 }
 
 func RunScheduler(
@@ -23,10 +22,6 @@ func RunScheduler(
 	jobs chan<- storage.DeliveryJob,
 	opts SchedulerOptions,
 ) {
-	if opts.Now == nil {
-		opts.Now = time.Now
-	}
-
 	recoverLeases(ctx, db)
 
 	ticker := time.NewTicker(opts.Interval)
