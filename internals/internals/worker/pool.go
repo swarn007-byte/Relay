@@ -17,7 +17,8 @@ func StartPool(
 	db *sql.DB,
 	jobs <-chan storage.DeliveryJob,
 	workerCount int,
-) *sync.WaitGroup {
+	secret []byte,
+) *sync.WaitGroup
 
 	var wg sync.WaitGroup
 
