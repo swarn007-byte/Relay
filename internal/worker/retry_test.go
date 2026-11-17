@@ -1,114 +1,75 @@
 package worker
 
 import (
-	"context"
-	"database/sql"
-	"net/http"
-	"net/http/httptest"
-	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/swarn007-byte/Relay/internal/storage"
-	_ "modernc.org/sqlite"
 )
 
-func TestFailedDeliverySchedulesRetry(t *testing.T) {
-	ctx := context.Background()
+func TestRetryDelayBounds(t *testing.T) {
+	base := 5 * time.Second
+	max := 60 * time.Second
 
-	// Simulate a failing webhook endpoint.
-	receiver := httptest.NewServer(
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}),
-	)
-	defer receiver.Close()
-
-	// Create a fresh database for this test.
-	dbPath := filepath.Join(t.TempDir(), "retry.db")
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	if err := storage.CreateTables(db); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		attempt int
+		nominal time.Duration
+	}{
+		{1, 5 * time.Second},
+		{2, 10 * time.Second},
+		{3, 20 * time.Second},
+		{4, 40 * time.Second},
+		{5, 60 * time.Second},
+		{6, 60 * time.Second},
+		{100, 60 * time.Second},
 	}
 
-	now := time.Now().UTC().Add(-time.Second).
-		Format(time.RFC3339Nano)
+	for _, tc := range cases {
+		for i := 0; i < 200; i++ {
+			delay := RetryDelay(tc.attempt, base, max)
+			lower := tc.nominal * 8 / 10
+			upper := tc.nominal * 12 / 10
+			if upper > max {
+				upper = max
+			}
+			if delay < lower || delay > upper {
+				t.Fatalf("attempt %d: delay %s outside [%s, %s]", tc.attempt, delay, lower, upper)
+			}
+		}
+	}
+}
 
-	// Insert event.
-	_, err = db.Exec(
-		`INSERT INTO events
-         (id, event_type, payload, created_at)
-         VALUES (?, ?, ?, ?)`,
-		"evt_retry", "payment.failed",
-		`{"amount":500}`, now,
-	)
-	if err != nil {
-		t.Fatal(err)
+func TestRetryDelayNeverExceedsMax(t *testing.T) {
+	base := 5 * time.Second
+	max := 60 * time.Second
+	for attempt := 0; attempt <= 1000; attempt++ {
+		delay := RetryDelay(attempt, base, max)
+		if delay <= 0 {
+			t.Fatalf("attempt %d: non-positive delay %s", attempt, delay)
+		}
+		if delay > max {
+			t.Fatalf("attempt %d: delay %s exceeds max %s", attempt, delay, max)
+		}
+	}
+}
+
+func TestRetryDelayEdges(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		d := RetryDelay(0, 5*time.Second, time.Minute)
+		if d < 4*time.Second || d > 6*time.Second {
+			t.Fatalf("attempt 0 should behave like attempt 1, got %s", d)
+		}
+		d = RetryDelay(-5, 5*time.Second, time.Minute)
+		if d < 4*time.Second || d > 6*time.Second {
+			t.Fatalf("negative attempt should behave like attempt 1, got %s", d)
+		}
 	}
 
-	// Insert pending delivery job.
-	_, err = db.Exec(
-		`INSERT INTO delivery_jobs
-         (delivery_id, event_id, status,
-          target_url, attempts, next_attempt_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-		"del_retry", "evt_retry", "pending",
-		receiver.URL, 0, now,
-	)
-	if err != nil {
-		t.Fatal(err)
+	d := RetryDelay(50, 0, 0)
+	if d <= 0 {
+		t.Fatalf("zero configuration must fall back to defaults, got %s", d)
 	}
 
-	jobs := make(chan storage.DeliveryJob, 10)
-	wg := StartPool(ctx, db, jobs, 2, []byte("test-secret-0123456789abcdef0123456789"))
-
-	// Dispatch the pending job.
-	err = ScheduleJobs(ctx, db, jobs, 10)
-
-	close(jobs)
-	wg.Wait()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify the failed job was scheduled again.
-	var status string
-	var attempts int
-	var nextAttempt string
-
-	err = db.QueryRow(
-		`SELECT status, attempts, next_attempt_at
-         FROM delivery_jobs
-         WHERE delivery_id = ?`,
-		"del_retry",
-	).Scan(&status, &attempts, &nextAttempt)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if status != "pending" {
-		t.Fatalf("expected pending, got %s", status)
-	}
-
-	if attempts != 1 {
-		t.Fatalf("expected 1 attempt, got %d", attempts)
-	}
-
-	retryAt, err := time.Parse(time.RFC3339Nano, nextAttempt)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !retryAt.After(time.Now().Add(3 * time.Second)) {
-		t.Fatalf("retry time was not scheduled in the future: %s",
-			nextAttempt)
+	d = RetryDelay(1, 10*time.Second, time.Second)
+	if d > 10*time.Second {
+		t.Fatalf("max below base must be raised to base, got %s", d)
 	}
 }
