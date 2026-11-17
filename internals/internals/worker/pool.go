@@ -9,7 +9,7 @@ import (
 
 	"github.com/swarn007-byte/Relay/internals/internals/storage"
 )
-
+const MaxAttempts = 5
 func StartPool(
 	ctx context.Context,
 	db *sql.DB,
