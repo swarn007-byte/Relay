@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"time"
 
-	// "uuid"
-
 	"github.com/google/uuid"
 )
 
@@ -17,58 +15,51 @@ func SaveEvent(
 	eventType string,
 	targetURL string,
 	payload []byte,
-) error {
-
-	//begin the transaction
+) (string, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer tx.Rollback()
-	now := time.Now().UTC().Format(time.RFC3339Nano)
 
-	//next is insert this into event table
-	// Insert event
+	now := time.Now().UTC()
+	nowMs := timeToMillis(now)
+
 	_, err = tx.ExecContext(
 		ctx,
-		`insert into events
-		(id, event_type, payload, created_at)
-		values (?, ?, ?, ?)`,
+		`insert into events (id, event_type, payload, created_at)
+		 values (?, ?, ?, ?)`,
 		eventID,
 		eventType,
 		string(payload),
-		now,
+		nowMs,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	// insert into events(id,event_type,payload,created_at)
-	// values(eventID,eventType,payload,time.Now())
 
 	deliveryID := uuid.NewString()
 
-	//insert into delivery job table
 	_, err = tx.ExecContext(
 		ctx,
 		`insert into delivery_jobs
-			(delivery_id, event_id, status, target_url, attempts, next_attempt_at)
-			values (?, ?, ?, ?, ?, ?)`,
+		 (delivery_id, event_id, status, target_url, attempts,
+		  next_attempt_at, lease_owner, lease_expires_at, last_error,
+		  created_at, updated_at)
+		 values (?, ?, 'pending', ?, 0, ?, null, null, null, ?, ?)`,
 		deliveryID,
 		eventID,
-		"pending",
 		targetURL,
-		0,
-		now,
+		nowMs,
+		nowMs,
+		nowMs,
 	)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	//next is insert into delivery job table
-
-	// insert into dedelivery_jobs(delivery_id,event_id,status,target_url,attempts,next_attempt_at)
-	// values()
-
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	return deliveryID, nil
 }
