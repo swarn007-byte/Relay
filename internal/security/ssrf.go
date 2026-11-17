@@ -145,10 +145,13 @@ func (g *Guard) DialContext(ctx context.Context, network, addr string) (net.Conn
 		if dialErr == nil {
 			return conn, nil
 		}
-		dialErrs = append(dialErrs, fmt.Sprintf("%s: %v", ip, dialErr))
+		dialErrs = append(dialErrs, dialErr.Error())
 	}
 
 	if allowedSeen {
+		if len(dialErrs) == 1 {
+			return nil, errors.New(dialErrs[0])
+		}
 		return nil, fmt.Errorf("dial %s: %s", host, strings.Join(dialErrs, "; "))
 	}
 	if len(blockedErrs) == 0 {
