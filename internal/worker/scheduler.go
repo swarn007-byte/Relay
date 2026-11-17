@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/swarn007-byte/Relay/internals/storage"
+	"github.com/swarn007-byte/Relay/internal/storage"
 )
 
 func ScheduleJobs(

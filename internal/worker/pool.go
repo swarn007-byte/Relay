@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/swarn007-byte/Relay/internals/internals/storage"
+	"github.com/swarn007-byte/Relay/internal/storage"
 )
 
 const MaxAttempts = 5
@@ -18,7 +18,7 @@ func StartPool(
 	jobs <-chan storage.DeliveryJob,
 	workerCount int,
 	secret []byte,
-) *sync.WaitGroup
+) *sync.WaitGroup {
 
 	var wg sync.WaitGroup
 
@@ -43,7 +43,7 @@ func StartPool(
 					return
 				}
 
-				err := DeliverWebhook(ctx, job,secret)
+				err := DeliverWebhook(ctx, job, secret)
 
 				dbCtx, cancel := context.WithTimeout(
 					context.Background(),

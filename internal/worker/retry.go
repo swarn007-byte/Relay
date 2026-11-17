@@ -1,11 +1,5 @@
 package worker
 
-import "time"
-
-
-
-package worker
-
 import (
 	"math/rand"
 	"time"

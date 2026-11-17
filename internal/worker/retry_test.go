@@ -3,43 +3,29 @@ package worker
 import (
 	"context"
 	"database/sql"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/swarn007-byte/Relay/internals/internals/storage"
+	"github.com/swarn007-byte/Relay/internal/storage"
 	_ "modernc.org/sqlite"
 )
 
-func TestDeliveryPipeline(t *testing.T) {
+func TestFailedDeliverySchedulesRetry(t *testing.T) {
 	ctx := context.Background()
 
-	// 1. Create a local webhook receiver
-	receiver := httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost {
-				t.Errorf("expected POST, got %s", r.Method)
-			}
-
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				t.Errorf("failed reading body: %v", err)
-			}
-
-			if string(body) != `{"amount":500}` {
-				t.Errorf("unexpected payload: %s", body)
-			}
-
-			w.WriteHeader(http.StatusOK)
-		},
-	))
+	// Simulate a failing webhook endpoint.
+	receiver := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}),
+	)
 	defer receiver.Close()
 
-	// 2. Create an isolated SQLite database
-	dbPath := filepath.Join(t.TempDir(), "test.db")
+	// Create a fresh database for this test.
+	dbPath := filepath.Join(t.TempDir(), "retry.db")
 
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -51,37 +37,38 @@ func TestDeliveryPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 3. Insert a test event and delivery job
 	now := time.Now().UTC().Add(-time.Second).
 		Format(time.RFC3339Nano)
 
+	// Insert event.
 	_, err = db.Exec(
 		`INSERT INTO events
          (id, event_type, payload, created_at)
          VALUES (?, ?, ?, ?)`,
-		"evt_test", "payment.success",
+		"evt_retry", "payment.failed",
 		`{"amount":500}`, now,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// Insert pending delivery job.
 	_, err = db.Exec(
 		`INSERT INTO delivery_jobs
          (delivery_id, event_id, status,
           target_url, attempts, next_attempt_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-		"del_test", "evt_test", "pending",
+		"del_retry", "evt_retry", "pending",
 		receiver.URL, 0, now,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// 4. Start workers and schedule the job
 	jobs := make(chan storage.DeliveryJob, 10)
-	wg := StartPool(ctx, db, jobs, 2)
+	wg := StartPool(ctx, db, jobs, 2, []byte("test-secret-0123456789abcdef0123456789"))
 
+	// Dispatch the pending job.
 	err = ScheduleJobs(ctx, db, jobs, 10)
 
 	close(jobs)
@@ -91,26 +78,37 @@ func TestDeliveryPipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 5. Verify the final database status
+	// Verify the failed job was scheduled again.
 	var status string
 	var attempts int
+	var nextAttempt string
 
 	err = db.QueryRow(
-		`SELECT status, attempts
+		`SELECT status, attempts, next_attempt_at
          FROM delivery_jobs
          WHERE delivery_id = ?`,
-		"del_test",
-	).Scan(&status, &attempts)
+		"del_retry",
+	).Scan(&status, &attempts, &nextAttempt)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if status != "delivered" {
-		t.Fatalf("expected delivered, got %s", status)
+	if status != "pending" {
+		t.Fatalf("expected pending, got %s", status)
 	}
 
 	if attempts != 1 {
 		t.Fatalf("expected 1 attempt, got %d", attempts)
+	}
+
+	retryAt, err := time.Parse(time.RFC3339Nano, nextAttempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !retryAt.After(time.Now().Add(3 * time.Second)) {
+		t.Fatalf("retry time was not scheduled in the future: %s",
+			nextAttempt)
 	}
 }

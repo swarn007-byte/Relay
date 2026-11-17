@@ -15,8 +15,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/swarn007-byte/Relay/internals/internals/worker"
-	"github.com/swarn007-byte/Relay/internals/storage"
+	"github.com/swarn007-byte/Relay/internal/storage"
+	"github.com/swarn007-byte/Relay/internal/worker"
 )
 
 type EventRequest struct {
@@ -115,13 +115,13 @@ func main() {
 		log.Fatal("RELAY_WEBHOOK_SECRET must contain at least 32 bytes")
 	}
 
-	wg := worker.StartPool(ctx, db, jobs, 3, secret)
-
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
 		5*time.Second,
 	)
 	defer cancel()
+
+	wg := worker.StartPool(ctx, db, jobs, 3, secret)
 
 	if err := worker.ScheduleJobs(ctx, db, jobs, 10); err != nil {
 		log.Println("Scheduling error:", err)

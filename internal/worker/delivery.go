@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/swarn007-byte/Relay/internals/internals/storage"
+	"github.com/swarn007-byte/Relay/internal/storage"
 )
 
 var client = &http.Client{
