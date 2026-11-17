@@ -52,15 +52,7 @@ Project ownership is enforced before reading or changing tenant resources. Passw
 
 Use TLS for public deployment. Sessions are Secure over HTTPS, HttpOnly, and SameSite=Strict. Configure `RELAY_PUBLIC_URL` when a reverse proxy changes the host. Authentication attempts are limited by peer IP; configure trusted edge protections before a public launch. Never expose legacy mode publicly.
 
-The Dockerfile runs as UID 65532. For local SQLite hosting, provide a writable persistent volume at `/data`. The optional `render.yaml` uses a free Render service with a remote Turso database and requires database credentials in Render settings. No website or Vercel proxy is included. Free backend services may sleep and pause delivery. Existing hosted deployments are managed independently of source removal.
-
-To build inside an environment with a custom trusted CA:
-
-```sh
-docker build --secret id=ca_bundle,src=/etc/ssl/certs/ca-certificates.crt -t relay .
-```
-
-TLS and module checksum verification stay enabled. The CA bundle is only mounted during installation.
+Build and run the Go binary directly on your chosen server. For local SQLite hosting, use a writable persistent directory and configure `RELAY_DB_PATH`. A remote database can be configured separately using the Turso variables above. Docker files and provider-specific deployment configuration have been removed. Free hosting may sleep and pause delivery. Existing hosted deployments are managed independently of repository files.
 
 ## Compatibility and limitations
 
