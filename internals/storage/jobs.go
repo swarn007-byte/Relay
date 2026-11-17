@@ -171,3 +171,36 @@ func ScheduleRetry(
 
 	return nil
 }
+func MarkDead(
+	ctx context.Context,
+	db *sql.DB,
+	deliveryID string,
+) error {
+	result, err := db.ExecContext(
+		ctx,
+		`UPDATE delivery_jobs
+         SET status = 'dead',
+             attempts = attempts + 1,
+             next_attempt_at = NULL
+         WHERE delivery_id = ?
+           AND status = 'processing'`,
+		deliveryID,
+	)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected != 1 {
+		return fmt.Errorf(
+			"cannot mark job %s dead: not processing",
+			deliveryID,
+		)
+	}
+
+	return nil
+}
